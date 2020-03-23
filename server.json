@@ -1,0 +1,22 @@
+{
+    "name": "VenstarCT",
+    "docs": "https://github.com/Goose66/VenstarCT-polyglotv2",
+    "type": "python3",
+    "executable": "venstar-poly.py",
+    "install": "install.sh",
+    "description": "Control yout Venstar ColorTouch thermostats through a local API.",
+    "notice": "",
+    "shortPoll": "5",
+    "longPoll": "60",
+    "profile_version": "0.1",
+    "credits": [
+        {
+           "title": "venstar-poly: a Polyglot NodeServer for Venstar ColorTouch thermostats.",
+           "author": "W. Randy King (Goose66)",
+           "version": "0.1.1",
+           "date": "March 22, 2020",
+           "source": "https://github.com/Goose66/VenstarCT-polyglotv2",
+           "license": "https://github.com/Goose66/VenstarCT-polyglotv2/master/LICENSE"
+       }
+    ]
+}

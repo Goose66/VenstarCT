@@ -1,0 +1,101 @@
+<nodeDefs>
+  <nodeDef id="CONTROLLER" nls="CTR">
+    <editors />
+    <sts>
+      <st id="ST" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV20" editor="CTR_LOGLEVEL" />
+    </sts>
+    <cmds>
+      <sends />
+      <accepts>
+        <cmd id="DISCOVER" />
+        <cmd id="UPDATE_PROFILE" />
+        <cmd id="SET_LOGLEVEL">
+          <p id="" editor="CTR_LOGLEVEL" init="GV20" />
+        </cmd>          
+      </accepts>
+    </cmds>
+  </nodeDef>
+  <nodeDef id="THERMOSTAT" nls="TSTAT">
+    <sts>
+      <st id="ST" editor="_17_0" /> <!-- ISY F Temperature UOM -->
+      <st id="CLISPH" editor="TSTAT_SETPOINT" />
+      <st id="CLISPC" editor="TSTAT_SETPOINT" />
+      <st id="CLIMD" editor="TSTAT_MODE" />
+      <st id="CLIFS" editor="TSTAT_FAN_MODE" />
+      <st id="CLIHUM" editor="_22_0" /> <!-- ISY Relative Humidity UOM -->
+      <st id="CLIHCS" editor="TSTAT_HCS" />
+      <st id="CLIFRS" editor="TSTAT_FAN_RUNSTATE" />
+      <st id="CLISMD" editor="TSTAT_SCHED_PART" />
+      <st id="GV0" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV1" editor="TSTAT_AWAY_STATE" />
+      <st id="GV11" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV12" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV13" editor="_2_0" /> <!-- ISY Bool UOM -->
+    </sts>
+    <cmds>
+      <sends />
+      <accepts>
+        <cmd id="BRT" />
+        <cmd id="DIM" />
+        <cmd id="AWAY_ON" />
+        <cmd id="AWAY_OFF" />
+        <cmd id="SCHED_ON" />
+        <cmd id="SCHED_OFF" />
+        <cmd id="SET_CLISPH">
+          <p id="" editor="TSTAT_SETPOINT" init="CLISPH" />
+        </cmd>
+        <cmd id="SET_CLISPC">
+          <p id="" editor="TSTAT_SETPOINT" init="CLISPC" />
+        </cmd>
+        <cmd id="SET_CLIMD">
+          <p id="" editor="TSTAT_MODE" init="CLIMD" />
+        </cmd>
+        <cmd id="SET_CLIFS">
+          <p id="" editor="TSTAT_FAN_MODE" init="CLIFS" />
+        </cmd>
+      </accepts>
+    </cmds>
+  </nodeDef>
+  <nodeDef id="THERMOSTAT_C" nls="TSTAT">
+    <sts>
+      <st id="ST" editor="_4_1" /> <!-- ISY C Temperature UOM -->
+      <st id="CLISPH" editor="TSTAT_SETPOINT_C" />
+      <st id="CLISPC" editor="TSTAT_SETPOINT_C" />
+      <st id="CLIMD" editor="TSTAT_MODE" />
+      <st id="CLIFS" editor="TSTAT_FAN_MODE" />
+      <st id="CLIHUM" editor="_22_0" /> <!-- ISY Relative Humidity UOM -->
+      <st id="CLIHCS" editor="TSTAT_HCS" />
+      <st id="CLIFRS" editor="TSTAT_FAN_RUNSTATE" />
+      <st id="CLISMD" editor="TSTAT_SCHED_PART" />
+      <st id="GV0" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV1" editor="TSTAT_AWAY_STATE" />
+      <st id="GV11" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV12" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV13" editor="_2_0" /> <!-- ISY Bool UOM -->
+    </sts>
+    <cmds>
+      <sends />
+      <accepts>
+        <cmd id="BRT" />
+        <cmd id="DIM" />
+        <cmd id="AWAY_ON" />
+        <cmd id="AWAY_OFF" />
+        <cmd id="SCHED_ON" />
+        <cmd id="SCHED_OFF" />  
+        <cmd id="SET_CLISPH">
+          <p id="" editor="TSTAT_SETPOINT_C" init="CLISPH" />
+        </cmd>
+        <cmd id="SET_CLISPC">
+          <p id="" editor="TSTAT_SETPOINT_C" init="CLISPH" />
+        </cmd>
+        <cmd id="SET_CLIMD">
+          <p id="" editor="TSTAT_MODE" init="CLIMD" />
+        </cmd>
+        <cmd id="SET_CLIFS">
+          <p id="" editor="TSTAT_FAN_MODE" init="CLIFS" />
+        </cmd>
+      </accepts>
+    </cmds>
+  </nodeDef>
+</nodeDefs>
