@@ -12,4 +12,4 @@ A NodeServer for Polyglot v2 that interfaces to the Venstar ColorTouch series of
 
 1. The nodeserver relies on polling of the Venstar ColorTouch thermostats, so there may be some latency (up to shortPoll seconds) for reflections of changes in state.
 
-For more information regarding this Polyglot Nodeserver, see https://forum.universal-devices.com/topic/28463-polyglot-bond-bridge-nodeserver/.
+For more information regarding this Polyglot Nodeserver, see https://forum.universal-devices.com/topic/??????/.
