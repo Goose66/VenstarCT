@@ -28,18 +28,15 @@
       <st id="CLIFRS" editor="TSTAT_FAN_RUNSTATE" />
       <st id="CLISMD" editor="TSTAT_SCHED_PART" />
       <st id="GV0" editor="_2_0" /> <!-- ISY Bool UOM -->
-      <st id="GV1" editor="TSTAT_AWAY_STATE" />
-      <st id="GV11" editor="_2_0" /> <!-- ISY Bool UOM -->
-      <st id="GV12" editor="_2_0" /> <!-- ISY Bool UOM -->
-      <st id="GV13" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV11" editor="TSTAT_ALERT" /> 
+      <st id="GV12" editor="TSTAT_ALERT" />
+      <st id="GV13" editor="TSTAT_ALERT" />
     </sts>
     <cmds>
       <sends />
       <accepts>
         <cmd id="BRT" />
         <cmd id="DIM" />
-        <cmd id="AWAY_ON" />
-        <cmd id="AWAY_OFF" />
         <cmd id="SCHED_ON" />
         <cmd id="SCHED_OFF" />
         <cmd id="SET_CLISPH">
@@ -69,25 +66,22 @@
       <st id="CLIFRS" editor="TSTAT_FAN_RUNSTATE" />
       <st id="CLISMD" editor="TSTAT_SCHED_PART" />
       <st id="GV0" editor="_2_0" /> <!-- ISY Bool UOM -->
-      <st id="GV1" editor="TSTAT_AWAY_STATE" />
-      <st id="GV11" editor="_2_0" /> <!-- ISY Bool UOM -->
-      <st id="GV12" editor="_2_0" /> <!-- ISY Bool UOM -->
-      <st id="GV13" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV11" editor="TSTAT_ALERT" />
+      <st id="GV12" editor="TSTAT_ALERT" />
+      <st id="GV13" editor="TSTAT_ALERT" />
     </sts>
     <cmds>
       <sends />
       <accepts>
         <cmd id="BRT" />
         <cmd id="DIM" />
-        <cmd id="AWAY_ON" />
-        <cmd id="AWAY_OFF" />
         <cmd id="SCHED_ON" />
         <cmd id="SCHED_OFF" />  
         <cmd id="SET_CLISPH">
           <p id="" editor="TSTAT_SETPOINT_C" init="CLISPH" />
         </cmd>
         <cmd id="SET_CLISPC">
-          <p id="" editor="TSTAT_SETPOINT_C" init="CLISPH" />
+          <p id="" editor="TSTAT_SETPOINT_C" init="CLISPC" />
         </cmd>
         <cmd id="SET_CLIMD">
           <p id="" editor="TSTAT_MODE" init="CLIMD" />
@@ -96,6 +90,16 @@
           <p id="" editor="TSTAT_FAN_MODE" init="CLIFS" />
         </cmd>
       </accepts>
+    </cmds>
+  </nodeDef>
+  <nodeDef id="SENSOR" nls="SEN">
+    <sts>
+      <st id="ST" editor="_17_0" /> <!-- ISY C Temperature UOM -->
+      <st id="CLIHUM" editor="_22_0" /> <!-- ISY Relative Humidity UOM -->
+    </sts>
+    <cmds>
+      <sends />
+      <accepts />
     </cmds>
   </nodeDef>
 </nodeDefs>

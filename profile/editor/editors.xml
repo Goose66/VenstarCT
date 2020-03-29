@@ -6,13 +6,13 @@
     <range uom="17" min="34" max="104" step="1" prec="0" /> <!-- ISY Farenheit UOM with Venstar CT limits for heating setpoints -->
   </editor>
   <editor id="TSTAT_SETPOINT_C">
-    <range uom="4" min="1" max="40" step="1" prec="1" /> <!-- ISY Celcius UOM with Venstar CT limits for heating setpoints -->
+    <range uom="4" min="1.5" max="37.0" step="0.5" prec="1" /> <!-- ISY Celcius UOM with Venstar CT limits for heating setpoints -->
   </editor>
   <editor id="TSTAT_MODE">
-    <range uom="67" subset="0,1,2,3" /> <!-- ISY Thermostat mode UOM limited to "Off," "Heat," "Cool," and "Auto" -->
+    <range uom="67" subset="0-3,13" /> <!-- ISY Thermostat mode UOM limited to "Off," "Heat," "Cool," "Auto", and "Away" -->
   </editor>
   <editor id="TSTAT_HCS">
-    <range uom="66" subset="0,1,2,13,14" nls="IX_TSTAT_HCS" /> <!-- ISY Thermostat heat/cool state UOM limited to "Idle," "Heating," "Cooling," "Lockout," and "Error" -->
+    <range uom="25" subset="0-4" nls="IX_TSTAT_HCS" /> <!-- ISY Index because ISY thermostat heat/cool state UOM does not have "3-Lockout," and "4-Error" -->
   </editor>
   <editor id="TSTAT_FAN_MODE">
     <range uom="68" subset="0,1" /> <!-- ISY Index UOM limited to "Auto" and "On" -->
@@ -21,9 +21,9 @@
     <range uom="80" subset="0,1" /> <!-- ISY Index UOM limited to "Off" and "On" -->
   </editor>
   <editor id="TSTAT_SCHED_PART">
-    <range uom="25" subset="1-4,255" nls="IX_TSTAT_SCHED_PART" /> <!-- ISY Index UOM -->
+    <range uom="25" subset="0-4,255" nls="IX_TSTAT_SCHED_PART" /> <!-- ISY Index UOM -->
   </editor>
-  <editor id="TSTAT_AWAY_STATE">
-    <range uom="25" subset="0,1" nls="IX_TSTAT_AWAY_STATE" /> <!-- ISY Index UOM limited to "Home" and "Away" -->
+  <editor id="TSTAT_ALERT">
+    <range uom="25" subset="0,1" nls="IX_TSTAT_ALERT" /> <!-- ISY Index UOM for "Ok" and "Alert" -->
   </editor>
 </editors>

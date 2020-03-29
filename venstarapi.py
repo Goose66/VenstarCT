@@ -126,7 +126,6 @@ class thermostatConnection(object):
     # Get state information for the thermostat
     def getThermostatState(self):
         """Returns the current state of the thermostat
-        NOTE: For polling, calls all of the query APIS for the thermostat
 
         Returns:
         dictionary of state properties for the thermostat
@@ -137,31 +136,37 @@ class thermostatConnection(object):
         # call the session API with the parameters
         response  = self._call_api(_API_GET_THERMOSTAT_INFO)
         
-        # if data returned, also retrieve the sensor state
+        # if data returned, return the state properties
         if response and response.status_code == 200:
+            return response.json()          
+            
+        # otherwise return error (False)
+        else:
+            return False
 
-            # get the state data
-            respData = response.json()
-    
-            # get state of alerts
-            response  = self._call_api(_API_GET_ALERTS)
+    # Gets the alert status(es) for the the thermostat
+    def getThermostatAlerts(self):
+        """Returns the state of the alerts setup for the thermostat
 
-            # if data returned, add the alert states to the state properties
-            if response and response.status_code == 200:
+        Returns:
+        array of dictionaries for each alert for the thermostat
+        """
 
-                for alert in response.json()["alerts"]:
-                    name = alert["name"].replace(" ","").lower() + "alert"
-                    value = alert["active"]
-                    respData.update({name: value})
-                                    
-            return respData
+        self._logger.debug("in API getThermostatAlerts()...")
+   
+        # get state of alerts
+        response  = self._call_api(_API_GET_ALERTS)
+
+        # if data returned, return the alert states
+        if response and response.status_code == 200:
+            return response.json()
             
         # otherwise return error (False)
         else:
             return False
 
     # Get the temps from the remote sensors
-    def getSensorState(self):
+    def getSensorStates(self):
         """Returns the temps from the sensors
 
         Returns:
@@ -173,7 +178,7 @@ class thermostatConnection(object):
         # get the temperature sensor state
         response  = self._call_api(_API_GET_SENSOR_INFO)
 
-        # if data returned, add the sensor states to the state properties
+        # if data returned, return the sensor states
         if response and response.status_code == 200:
             return response.json()
             
@@ -308,7 +313,7 @@ def getThermostatInfo(hostName, logger=_LOGGER):
 
     # get remaining thermostat info from the thermostat state API 
     try:
-        # Call the REST API to get the api version info
+        # Call the REST API to get the thermostat info
         response = requests.request(
             _API_GET_THERMOSTAT_INFO["method"],
             _API_GET_THERMOSTAT_INFO["url"].format(host_name = hostName),
@@ -328,6 +333,30 @@ def getThermostatInfo(hostName, logger=_LOGGER):
         raise
     
     # add the additional info
+    thermostatInfo.update(response.json())
+
+    # get a list of the sensors setup for the thermostat
+    try:
+        # Call the REST API to get the sensor info
+        response = requests.request(
+            _API_GET_SENSOR_INFO["method"],
+            _API_GET_SENSOR_INFO["url"].format(host_name = hostName),
+            headers = _API_HTTP_HEADERS, # same every call     
+            timeout= _HTTP_GET_TIMEOUT
+        )
+
+        # raise anything other than a successful (200) HTTP code to error handling
+        response.raise_for_status()
+
+    # For errors that may indicate a bad hostName, log a warning and return false
+    except(requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
+        logger.warning("HTTP GET in getThermostatInfo() failed: %s", str(e))
+        return False
+    except:
+        logger.exception("Unexpected error from HTTP call in getThermostatInfo(): %s", sys.exc_info()[0])
+        raise
+    
+    # add the sensor info
     thermostatInfo.update(response.json())
 
     # return the thermostat info

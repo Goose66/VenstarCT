@@ -19,62 +19,101 @@ ISY_INDEX_UOM = 25 # Custom index UOM for translating direction values
 ISY_TEMP_F_UOM = 17 # UOM for temperatures (farenheit)
 ISY_TEMP_C_UOM = 4 # UOM for temperatures (celcius)
 ISY_REL_HUMIDITY = 22 # UOM for relative humidity (percent)
-ISY_THERMO_MODE_UOM = 67 # UOM for thermostat mode
-ISY_THERMO_HCS_UOM = 66 # UOM for thermostat heat/cool state
-ISY_THERMO_FS_UOM = 68 # UOM for fan mode
-ISY_THERMO_FRS_UOM = 80 # UOM for fan runstate
+ISY_TSTAT_MODE_UOM = 67 # UOM for thermostat mode
+ISY_TSTAT_HCS_UOM = 66 # UOM for thermostat heat/cool state
+ISY_TSTAT_FS_UOM = 68 # UOM for fan mode
+ISY_TSTAT_FRS_UOM = 80 # UOM for fan runstate
 
-# values for operation mode
-IX_SYS_OPMODE_OFF = 0
-IX_SYS_OPMODE_POOL = 1
-IX_SYS_OPMODE_SPA = 2
-IX_SYS_OPMODE_SERVICE = 3
-IX_SYS_OPMODE_UNKNOWN = 4
+# values for thermostat mode
+IX_TSTAT_MODE_OFF = 0
+IX_TSTAT_MODE_HEAT = 1
+IX_TSTAT_MODE_COOL = 2
+IX_TSTAT_MODE_AUTO = 3
+IX_TSTAT_MODE_AWAY = 13
 
-# values for driver device state
-IX_DEV_ST_UNKNOWN = -1
-IX_DEV_ST_OFF = 0
-IX_DEV_ST_ON = 1
-IX_DEV_ST_ENABLED = 3
+# values for schedule mode
+IX_TSTAT_SCHED_MODE_ACTIVE = 0
+IX_TSTAT_SCHED_MODE_INACTIVE = 255
 
 # custom parameter values for this nodeserver
 PARAM_HOSTNAMES = "hostname"
 PARAM_PIN = "pin"
+
+# Node class for temperature sensor
+class Sensor(polyinterface.Node):
+
+    id = "SENSOR"
+    hint = [0x01, 0x03, 0x03, 0x00] # Residential/Sensor/Climate Sensor
+    
+    # Override init to handle temp units
+    def __init__(self, controller, primary, addr, name, tempUnit):
+        super(Sensor, self).__init__(controller, primary, addr, name)
+    
+        # override the parent node with the thermostat node (defaults to controller)
+        self.parent = self.controller.nodes[self.primary]
+
+        # set the temp unit before calling the parent class init()
+        self.setTempUnit(tempUnit)
+
+    # Setup the termostat node for the correct temperature unit (0-F or 1-C)
+    def setTempUnit(self, tempUnit):
+        
+        # update the drivers in the node to the correct UOM
+        # this is so the numbers show up in the Admin Console with the right unit
+        for driver in self.drivers:
+            if driver["driver"] in ("ST"):
+                driver["uom"] = ISY_TEMP_C_UOM if tempUnit == 1 else ISY_TEMP_F_UOM
+        
+    drivers = [
+        {"driver": "ST", "value": 0.0, "uom": ISY_TEMP_F_UOM},
+        {"driver": "CLIHUM", "value": 0, "uom": ISY_REL_HUMIDITY},
+    ]
 
 # Node class for thermostat
 class Thermostat(polyinterface.Node):
 
     id = "THERMOSTAT"
     hint = [0x01, 0x0C, 0x01, 0x00] # Residential/HVAC/Thermostat
+    tempUnit = 0
     _hostName = ""
     _type = ""
-    _tempUnit = 0
     _conn = None
     
     # Override init to handle temp units
     def __init__(self, controller, primary, addr, name, hostName=None, type=None, tempUnit=None):
-        super(Thermostat, self).__init__(controller, primary, addr, name)
-
-        # make the thermostat a primary node
-        # Note: this is for future child nodes, e.g., sensors
-        self.isPrimary = True
 
         if hostName is None:
         
             # retrieve the thermostat properties from polyglot custom data
-            cData = self.controller.getCustomData(addr).split(";")
+            # Note: use controller and addr parameters instead of self.controller and self.address
+            # because parent class init() has not been called yet
+            cData = controller.getCustomData(addr).split(";")
             self._hostName = cData[0]
             self._type = cData[1]
-            self._tempUnit = cData[2]
+            self.tempUnit = cData[2]
 
         else:
             self._hostName = hostName
             self._type = type
-            self._tempUnit = tempUnit
+            self.tempUnit = tempUnit
 
-        # setup the temperature unit for the node
-        # this method updates the custom data for the node
-        self.setTempUnit(self._tempUnit)
+            # store instance variables in polyglot custom data
+            cData = ";".join([
+                self._hostName,
+                self._type,
+                str(self.tempUnit),
+            ])
+            controller.addCustomData(addr, cData)
+
+        # setup the temp unit before calling the parent class init()
+        self.setTempUnit(self.tempUnit)
+
+        # call the parent class init
+        super(Thermostat, self).__init__(controller, addr, addr, name) # send own address as primary
+
+        # make the thermostat a primary node
+        # Note: this is to support grouping of child nodes, e.g., sensors
+        self.isPrimary = True
 
         # create a connection object in the API for the the thermostat 
         self._conn = api.thermostatConnection(self._hostName, logger=LOGGER)
@@ -95,182 +134,215 @@ class Thermostat(polyinterface.Node):
             if driver["driver"] in ("ST", "CLISPH", "CLISPC"):
                 driver["uom"] = ISY_TEMP_C_UOM if tempUnit == 1 else ISY_TEMP_F_UOM
 
-        self._tempUnit = tempUnit
+    # Change the temperature unit for the thermostat node and update the ISY
+    def changeTempUnits(self, tempUnit):
+        
+        # setup the UOMs and ID for the temperature unit
+        self.setTempUnit(tempUnit)
+        
+        # update the node to Polyglot and the  ISY
+        self.controller.updateNode(self)
 
-        # store instance variables in polyglot custom data
-        cData = ";".join([
-            self._hostName,
-            self._type,
-            str(self._tempUnit),
-        ])
-        self.controller.addCustomData(self.address, cData)
+        # spin through the child nodes of this thermostat and update the tempunit
+        for addr in self.controller.nodes:
+
+            # ignore the controller and this thermostat node
+            if addr != self.address and addr != self.controller.address:
+
+                # if the device is a Sensor node with this thermostat as the primary, change its temp unit
+                node = self.controller.nodes[addr]
+                if node.id == "SENSOR" and node.primary == self.address:
+                    node.setTempUnit(tempUnit)
+
+        self.tempUnit = tempUnit
 
     # Increase/decrease the active setpoint by one degree
     def cmd_inc_dec(self, command):
 
         LOGGER.info("Increase or decrease temperature of %s in command handler: %s.", self.name, str(command))
 
-        # update the driver values for the thermostat since we are incrementing setpoints
-        self.updateNodeStates()
+        # Get the state values for the thermostat since we are incrementing setpoints
+        thermostatState = self._conn.getThermostatState()
 
         # if the thermostat is online
-        if int(self.getDriver("GV0")):
+        if thermostatState:
     
             # get the current thermostat settings
-            sph = float(self.getDriver("CLISPH"))
-            spc = float(self.getDriver("CLISPC"))
-            mode = int(self.getDriver("CLIMD"))
+            sph = thermostatState["heattemp"]
+            spc = thermostatState["cooltemp"]
+            mode = thermostatState["mode"]
+            away = (thermostatState["away"] == 1)
+            cmd = command["cmd"]
 
             # determine the setpoint to increase based on the mode
-            if mode == api.THERMO_MODE_OFF:
+            if away:
+                LOGGER.warning("Setpoint(s) not adjusted for thermostat in Away mode.")
+            elif mode == api.THERMO_MODE_OFF:
                 LOGGER.warning("Setpoint(s) not adjusted for thermostat in Off mode.")
-                return
-            if mode in (api.THERMO_MODE_HEAT, api.THERMO_MODE_AUTO):
-                if command["cmd"] == "BRT":
-                    sph += 1.0
-                else:
-                    sph -= 1.0
-            if mode in (api.THERMO_MODE_COOL, api.THERMO_MODE_AUTO):
-                if command["cmd"] == "BRT":
-                    spc += 1.0
-                else:
-                    spc -= 1.0
-
-            #TO-DO: can't change settings while in away mode
-
-            # call the controls API to set the new setpoints
-            if self._conn.setThermostatControls(heattemp=sph, cooltemp=spc):
-                self.setDriver("CLISPH", sph)
-                self.setDriver("CLISPC", spc)
-
             else:
-                LOGGER.error("Call to API setThermostatControls() failed in %s command handler.", command["cmd"])
+                if mode in (api.THERMO_MODE_HEAT, api.THERMO_MODE_AUTO):
+                    if cmd == "BRT":
+                        sph += 1.0
+                    else:
+                        sph -= 1.0
+                if mode in (api.THERMO_MODE_COOL, api.THERMO_MODE_AUTO):
+                    if cmd == "BRT":
+                        spc += 1.0
+                    else:
+                        spc -= 1.0
+
+                # call the controls API to set the new setpoints
+                if self._conn.setThermostatControls(heattemp=sph, cooltemp=spc):
+                    self.setDriver("CLISPH", sph)
+                    self.setDriver("CLISPC", spc)
+
+                else:
+                    LOGGER.error("Call to API setThermostatControls() failed in %s command handler.", cmd)
 
     # Set the thermostat heat setpoint to the specified value
     def cmd_set_sp(self, command):
 
         LOGGER.info("Set the setpoints for %s in command handler: %s", self.name, str(command))
 
-        # update the driver values for the thermostat since we have to specify both setpoint values
-        self.updateNodeStates()
+        # Get the state values for the thermostat since we have to specify both setpoint values
+        thermostatState = self._conn.getThermostatState()
 
         # if the thermostat is online
-        if int(self.getDriver("GV0")):
+        if thermostatState:
+    
+            # get the current thermostat settings
+            sph = thermostatState["heattemp"]
+            spc = thermostatState["cooltemp"]
+            mode = thermostatState["mode"]
+            setpointDelta = thermostatState["setpointdelta"]
+            away = (thermostatState["away"] == 1)
+            cmd = command["cmd"]
 
-            # set the setpoints based on the command 
-            if command["cmd"] == "SET_CLISPH":
-                spc = float(self.getDriver("CLISPC"))
-                sph = float(command["value"])
+            # can't change settings while in away mode
+            if away:
+                LOGGER.warning("Setpoint(s) not adjusted for thermostat in Away mode.")
             else:
-                sph = float(self.getDriver("CLISPH"))
-                spc = float(command["value"])
 
-            #TO-DO: maker sure spc > sph by setpointdelta degrees if in auto mode
-            #TO-DO: can't change settings while in away mode
+                # replace setpoint with the specified value based on the command 
+                if cmd == "SET_CLISPH":
+                    sph = float(command["value"])
+                else:
+                    spc = float(command["value"])
 
-            # call the controls API to set the new setpoints
-            if self._conn.setThermostatControls(heattemp=sph, cooltemp=spc):
-                self.setDriver("CLISPH", sph)
-                self.setDriver("CLISPC", spc)
+                # make sure spc > sph by setpoint delta degrees if in auto mode
+                if mode == api.THERMO_MODE_AUTO and (spc - sph) < setpointDelta:
+                    LOGGER.warning("Difference between heat and cool setpoint(s) must be greater than or equal to %d degrees for thermostat in Auto mode.", setpointDelta)
+                else:
+                    
+                    # call the controls API to set the new setpoints
+                    if self._conn.setThermostatControls(heattemp=sph, cooltemp=spc):
+                        self.setDriver("CLISPH", sph)
+                        self.setDriver("CLISPC", spc)
 
-            else:
-                LOGGER.error("Call to API setThermostatControls() failed in %s command handler.", command["cmd"])
+                    else:
+                        LOGGER.error("Call to API setThermostatControls() failed in %s command handler.", cmd)
 
     # Set the thermostat mode to the specified value
     def cmd_set_mode(self, command):
 
         LOGGER.info("Set the thermostat mode for %s in command handler: %s", self.name, str(command))
 
-        # update the driver values for the thermostat since we have to specify both setpoint values
-        self.updateNodeStates()
+        # Get the state values for the thermostat since we have to specify both setpoint values
+        thermostatState = self._conn.getThermostatState()
 
         # if the thermostat is online
-        if self.getDriver("GV0"):
-
+        if thermostatState:
+    
             # get the current thermostat settings
-            sph = float(self.getDriver("CLISPH"))
-            spc = float(self.getDriver("CLISPC"))
-            
-            mode = int(command.get("value"))
+            sph = thermostatState["heattemp"]
+            spc = thermostatState["cooltemp"]
+            away = (thermostatState["away"] == 1)
+            newMode = int(command.get("value"))
 
-            #TO-DO: can't change settings while in away mode
-
-            # call the controls API to set the thermostat mode
-            if self._conn.setThermostatControls(mode=mode, heattemp=sph, cooltemp=spc):
-                self.setDriver("CLIMD", mode)
+            # if new mode is Away mode, then call the API to set the away mode
+            if newMode == IX_TSTAT_MODE_AWAY:
+    
+                # call the settings API to turn on away mode
+                if not self._conn.setThermostatSettings(api.THERMO_SETTING_AWAY_STATE, 1):
+                    LOGGER.error("Call to API setThermostatSettings() failed in SET_CLIMD command handler.")
+                    return
 
             else:
-                LOGGER.error("Call to API setThermostatControls() failed in SET_CLIMD command handler.")
+                
+                # if the thermostat is currently in away mode then take the thermostat out of away mode before setting new mode
+                if away:
+
+                    # call the settings API to turn off away mode
+                    if not self._conn.setThermostatSettings(api.THERMO_SETTING_AWAY_STATE, 0):
+                        LOGGER.error("Call to API setThermostatSettings() failed in SET_CLIMD command handler.")
+                        return
+            
+                # call the controls API to set the thermostat mode
+                if not self._conn.setThermostatControls(mode=newMode, heattemp=sph, cooltemp=spc):
+                    LOGGER.error("Call to API setThermostatControls() failed in SET_CLIMD command handler.")
+                    return
+            
+            self.setDriver("CLIMD", newMode)
 
     # Set the thermostat mode to the specified value
     def cmd_set_fan(self, command):
 
         LOGGER.info("Set the fan mode for %s in command handler: %s", self.name, str(command))
 
-        fan = int(command.get("value"))    
+        # Get the state values for the thermostat since we can't modify the fan when in away mode
+        thermostatState = self._conn.getThermostatState()
 
-        #TO-DO: can't change settings while in away mode
-
-        # call the controls API to set fan mode
-        if self._conn.setThermostatControls(fan=fan):
-            self.setDriver("CLIFS", fan)
-
-        else:
-            LOGGER.error("Call to API setThermostatControls() failed in SET_CLIFS command handler.")
-
-    # Set the thermostat to away mode
-    def cmd_set_away_on(self, command):
-
-        LOGGER.info("Set %s to away mode in AWAY_ON command handler.", self.name)
-
-        # call the settings API to set the away mode
-        if self._conn.setThermostatSettings(api.THERMO_SETTING_AWAY_STATE, 1):
-            self.setDriver("GV1", 1)
-
-        else:
-            LOGGER.error("Call to API setThermostatSettings() failed in SET_AWAY_ON command handler.")
-
-    # Set the thermostat to home mode (away mode off)
-    def cmd_set_away_off(self, command):
+        # if the thermostat is online
+        if thermostatState:
     
-        LOGGER.info("Set %s to home mode in AWAY_OFF command handler.", self.name)
+            # get the current thermostat settings
+            away = (thermostatState["away"] == 1)
+            fan = int(command.get("value"))    
 
-        # call the settings API to set the away mode
-        if self._conn.setThermostatSettings(api.THERMO_SETTING_AWAY_STATE, 0):
-            self.setDriver("GV1", 0)
+            # can't change settings while in away mode
+            if away:
+                LOGGER.warning("Fan mode not adjusted for thermostat in Away mode.")
+            else:
+        
+                # call the controls API to set fan mode
+                if self._conn.setThermostatControls(fan=fan):
+                    self.setDriver("CLIFS", fan)
 
-        else:
-            LOGGER.error("Call to API setThermostatSettings() failed in SET_AWAY_OFF command handler.")
+                else:
+                    LOGGER.error("Call to API setThermostatControls() failed in SET_CLIFS command handler.")
 
     # Set the schedule mode on
-    def cmd_set_sched_on(self, command):
+    def cmd_set_sched(self, command):
     
-        LOGGER.info("Set schedule mode on for %s in SCHED_ON command handler.", self.name)
+        LOGGER.info("Set schedule mode on for %s in command handler: %s", self.name, str(command))
 
-        # call the settings API to set the schedule mode
-        if self._conn.setThermostatSettings(api.THERMO_SETTING_SCHEDULE_STATE, 1):
-            
-            # we have to update states to get the current schedule part
-            self.updateNodeStates()
+        # Get the state values for the thermostat since we can't modify the fan when in away mode
+        thermostatState = self._conn.getThermostatState()
 
-        else:
-            LOGGER.error("Call to API setThermostatSettings() failed in SET_SCHED_ON command handler.")
-
-    # Set the schedule mode off
-    def cmd_set_sched_off(self, command):
+        # if the thermostat is online
+        if thermostatState:
     
-        LOGGER.info("Set schedule mode off for %s in SCHED_OFF command handler.", self.name)
+            # get the current thermostat settings
+            away = (thermostatState["away"] == 1)
+            cmd = command["cmd"]
 
-        # call the settings API to set the sechdule mode
-        if self._conn.setThermostatSettings(api.THERMO_SETTING_SCHEDULE_STATE, 0):
-            
-            # update the schedule part to inactive
-            self.setDriver("CLISMD", api.THERMO_SCHED_PART_INACTIVE)
+            # can't change settings while in away mode
+            if away:
+                LOGGER.warning("Schedule mode not adjusted for thermostat in Away mode.")
+            else:
+        
+                schedMode = 1 if cmd == "SCHED_ON" else 0
 
-        else:
-            LOGGER.error("Call to API setThermostatSettings() failed in SET_SCHED_OFF command handler.")
+                # call the settings API to set the schedule mode
+                if self._conn.setThermostatSettings(api.THERMO_SETTING_SCHEDULE_STATE, schedMode):
+                    
+                    # update the schedule mode driver
+                    self.setDriver("CLISMD", IX_TSTAT_SCHED_MODE_ACTIVE if schedMode == 1 else IX_TSTAT_SCHED_MODE_INACTIVE)
 
-    # update the state this thermostat
+                else:
+                    LOGGER.error("Call to API setThermostatSettings() failed in %s command handler.", cmd)
+
+    # update the states for this thermostat
     def updateNodeStates(self, forceReport=False):
         
         # get the thermostat state from the API
@@ -282,17 +354,20 @@ class Thermostat(polyinterface.Node):
             self.setDriver("GV0", 1, True, forceReport) # Thermostat online
 
             # if the tempunits has changed, fix the node
-            if thermoState["tempunits"] != self._tempUnit:
-                self.setTempUnit(thermoState["tempunits"])
+            if thermoState["tempunits"] != self.tempUnit:
+                self.changeTempUnits(thermoState["tempunits"])
 
             # udpate the remaining driver values
             self.setDriver("ST", float(thermoState["spacetemp"]), True, forceReport)
             self.setDriver("CLISPH", float(thermoState["heattemp"]), True, forceReport)
             self.setDriver("CLISPC", float(thermoState["cooltemp"]), True, forceReport)
             self.setDriver("CLIHUM", float(thermoState["hum"]), True, forceReport)
-             # API thermostat mode translates directly to first four values (0-4) of ISY Thermostat mode UOM
-            self.setDriver("CLIMD", int(thermoState["mode"]), True, forceReport)
-             # API thermostat fan mode translates directly to first two values (0-1) of ISY Fan mode UOM
+            # API thermostat mode utilizes values 0-3 (off, heat, cool, auto) and 13 (away) of ISY Thermostat mode UOM
+            if thermoState["away"] == 1:
+                self.setDriver("CLIMD", IX_TSTAT_MODE_AWAY, True, forceReport)
+            else:
+                self.setDriver("CLIMD", int(thermoState["mode"]), True, forceReport)
+            # API thermostat fan mode translates directly to first two values (0-1) of ISY Fan mode UOM
             self.setDriver("CLIFS", int(thermoState["fan"]), True, forceReport)
             # API thermostat state translates directly to first three values (0-2) of ISY Thermostat heat/cool state UOM but has additional two values
             if thermoState["state"] in (0, 1, 2): 
@@ -306,14 +381,47 @@ class Thermostat(polyinterface.Node):
             self.setDriver("CLISMD", int(thermoState["schedulepart"]), True, forceReport)
             # set away state from API flag
             self.setDriver("GV1", int(thermoState["away"]), True, forceReport)
-            # set the default alerts from the state info (can these change?)
-            self.setDriver("GV11", int(thermoState["airfilteralert"]), True, forceReport) 
-            self.setDriver("GV12", int(thermoState["uvlampalert"]), True, forceReport) 
-            self.setDriver("GV13", int(thermoState["servicealert"]), True, forceReport) 
+            
+            # get the sensor states
+            sensorStates = self._conn.getSensorStates() 
+
+            if sensorStates:
+
+                # set the default alerts (filter, UV lamp, and service) from the alert info 
+                sensors = sensorStates["sensors"]
+                
+                # spin through the child nodes of this thermostat and update the sensors
+                for addr in self.controller.nodes:
+        
+                    # ignore the controller and this thermostat node
+                    if addr != self.address and addr != self.controller.address:
+
+                        # if the device is a Sesnor node, retrieve the driver values from the sensor State data
+                        node = self.controller.nodes[addr]
+                        if node.id == "SENSOR" and node.primary == self.address:
+                            node.setDriver("ST", float(next((sensor["temp"] for sensor in sensors if sensor["name"] == node.name), 0.0)), True, forceReport) 
+                            node.setDriver("CLIHUM", int(next((sensor["hum"] for sensor in sensors if sensor["name"] == node.name), 0)), True, forceReport)             
 
         else:
             # set thermostat state to offline:
             self.setDriver("GV0", 0, True, force=forceReport) # Thermostat offline
+
+    # update the alerts and runtimes for this thermostat
+    def updateAlertsAndTimes(self, forceReport=False):
+        
+        # get the alert properties for the thermostat
+        alertStates = self._conn.getThermostatAlerts() 
+
+        if alertStates:
+
+            # set the default alerts (filter, UV lamp, and service) from the alert info 
+            alerts = alertStates["alerts"]
+            self.setDriver("GV11", int(next((alert["active"] for alert in alerts if alert["name"] == "Air Filter"), False)), True, forceReport) 
+            self.setDriver("GV12", int(next((alert["active"] for alert in alerts if alert["name"] == "UV Lamp"), False)), True, forceReport) 
+            self.setDriver("GV13", int(next((alert["active"] for alert in alerts if alert["name"] == "Service"), False)), True, forceReport) 
+
+        # get the runtimes for the thermostat
+        # TO-DO
 
     # disconnect from the thermostat (close session) and show as offlien
     def disconnect(self):
@@ -332,17 +440,16 @@ class Thermostat(polyinterface.Node):
         {"driver": "ST", "value": 0, "uom": ISY_TEMP_F_UOM},
         {"driver": "CLISPH", "value": 0, "uom": ISY_TEMP_F_UOM},
         {"driver": "CLISPC", "value": 0, "uom": ISY_TEMP_F_UOM},
-        {"driver": "CLIMD", "value": 0, "uom": ISY_THERMO_MODE_UOM},
-        {"driver": "CLIFS", "value": 0, "uom": ISY_THERMO_FS_UOM},
+        {"driver": "CLIMD", "value": 0, "uom": ISY_TSTAT_MODE_UOM},
+        {"driver": "CLIFS", "value": 0, "uom": ISY_TSTAT_FS_UOM},
         {"driver": "CLIHUM", "value": 0, "uom": ISY_REL_HUMIDITY},
-        {"driver": "CLIHCS", "value": 0, "uom": ISY_THERMO_HCS_UOM},
-        {"driver": "CLIFRS", "value": 0, "uom": ISY_THERMO_FRS_UOM},
+        {"driver": "CLIHCS", "value": 0, "uom": ISY_TSTAT_HCS_UOM},
+        {"driver": "CLIFRS", "value": 0, "uom": ISY_TSTAT_FRS_UOM},
         {"driver": "CLISMD", "value": 0, "uom": ISY_INDEX_UOM},
         {"driver": "GV0", "value": 0, "uom": ISY_BOOL_UOM},
-        {"driver": "GV1", "value": 0, "uom": ISY_INDEX_UOM},
-        {"driver": "GV11", "value": 0, "uom": ISY_BOOL_UOM},
-        {"driver": "GV12", "value": 0, "uom": ISY_BOOL_UOM},
-        {"driver": "GV13", "value": 0, "uom": ISY_BOOL_UOM},
+        {"driver": "GV11", "value": 0, "uom": ISY_INDEX_UOM},
+        {"driver": "GV12", "value": 0, "uom": ISY_INDEX_UOM},
+        {"driver": "GV13", "value": 0, "uom": ISY_INDEX_UOM},
     ]
     commands = {
         "BRT": cmd_inc_dec,
@@ -351,10 +458,8 @@ class Thermostat(polyinterface.Node):
         "SET_CLISPC": cmd_set_sp,
         "SET_CLIMD": cmd_set_mode,
         "SET_CLIFS": cmd_set_fan,
-        "AWAY_ON": cmd_set_away_on,
-        "AWAY_OFF": cmd_set_away_off,
-        "SCHED_ON": cmd_set_sched_on,
-        "SCHED_OFF": cmd_set_sched_off,
+        "SCHED_ON": cmd_set_sched,
+        "SCHED_OFF": cmd_set_sched,
     }
 
 # Controller class
@@ -399,16 +504,14 @@ class Controller(polyinterface.Controller):
                 LOGGER.info("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node["node_def_id"])
 
                 # add sensor nodes
-                # TO-DO
+                if node["node_def_id"] == "SENSOR":
+                    self.addNode(Sensor(self, node["primary"], addr, node["name"], self.nodes[node["primary"]].tempUnit))
 
         # Set the nodeserver status flag to indicate nodeserver is running
         self.setDriver("ST", 1, True, True)
 
         # Report the logger level to the ISY
         self.setDriver("GV20", LOGGER.level, True, True)
- 
-        # update the driver values of all nodes (force report)
-        self.updateNodeStates(True)
 
     # shutdown the nodeserver on stop
     def stop(self):
@@ -460,14 +563,34 @@ class Controller(polyinterface.Controller):
     # called every longPoll seconds (default 30)
     def longPoll(self):
 
-        pass
+        LOGGER.info("Updating alerts and runtimes in longPoll()...")                     
+        
+        # iterate through the nodes of the nodeserver
+        for addr in self.nodes:
+        
+            # ignore the controller node
+            if addr != self.address:
 
-    # called every shortPoll seconds (default 10)
+                # if the device is a thermostat node, call the update alerts method
+                node = self.controller.nodes[addr]
+                if node.id in ("THERMOSTAT", "THERMOSTAT_C"):
+                    node.updateAlertsAndTimes()
+
+    # called every shortPoll seconds
     def shortPoll(self):
 
-        # update the state values for thermostats
         LOGGER.info("Updating node states in shortPoll()...")
-        self.updateNodeStates()          
+        
+        # iterate through the nodes of the nodeserver
+        for addr in self.nodes:
+        
+            # ignore the controller node
+            if addr != self.address:
+
+                # if the device is a thermostat node, call the update node states method
+                node = self.controller.nodes[addr]
+                if node.id in ("THERMOSTAT", "THERMOSTAT_C"):
+                    node.updateNodeStates()          
 
     # discover thermostats and SBB devices
     def discover(self):
@@ -532,20 +655,33 @@ class Controller(polyinterface.Controller):
                     continue
 
                 else:
-    
+
+                    tempUnit = thermoInfo["tempunits"]
+
                     # check to see if a thermostat node already exists for the thermostat
                     thermostatAddr = getValidNodeAddress(thermostat["id"][-8:])
                     if thermostatAddr not in self.nodes:
 
                         # get the relevant elements for the thermstat from the returned data
                         thermoName = thermoInfo["name"]
-                        tempUnits = thermoInfo["tempunits"]
                         thermoType = thermoInfo["type"]
 
                         # create a thermostat node for the thermostat
-                        node = Thermostat(self, self.address, thermostatAddr, getValidNodeName(thermoName), hostName, thermoType, tempUnits)
-                        self.addNode(node)
-                    
+                        thermostatNode = Thermostat(self, self.address, thermostatAddr, getValidNodeName(thermoName), hostName, thermoType, tempUnit)
+                        self.addNode(thermostatNode)
+                    else:
+                        thermostatNode = self.nodes[thermostatAddr]
+
+                    # add child nodes for the thermostats sensors
+                    n = 0
+                    for sensor in thermoInfo["sensors"]:
+                        
+                        # ignore the "Space Temp" sensor
+                        if sensor["name"] != "Space Temp":
+                            sensorAddr = getValidNodeAddress(thermostatAddr + "_S" + str(n))
+                            self.addNode(Sensor(self, thermostatAddr, sensorAddr, sensor["name"], tempUnit))
+                            n += 1
+
             else:
                 # Log a warning and add a notice to Polyglot dashboard
                 LOGGER.warning("Unable to query specified hostname %s", hostName)
@@ -557,15 +693,7 @@ class Controller(polyinterface.Controller):
         # send custom data added by new nodes to polyglot
         self.saveCustomData(self._customData)
 
-        # update the driver values for the discovered thermostats and devices (force report)
-        self.updateNodeStates(True)
-
-    # update the node states for all thermostats
-    def updateNodeStates(self, forceReport=False):
-
-        LOGGER.debug("Polling all thermostats in updateNodeState()...")
-        
-        # iterate through the nodes of the nodeserver
+        # update all driver values for all the discovered thermostats and devices
         for addr in self.nodes:
         
             # ignore the controller node
@@ -574,7 +702,8 @@ class Controller(polyinterface.Controller):
                 # if the device is a thermostat node, call the updateNodeStates method
                 node = self.controller.nodes[addr]
                 if node.id in ("THERMOSTAT", "THERMOSTAT_C"):
-                    node.updateNodeStates(forceReport)
+                    node.updateNodeStates(True)
+                    node.updateAlertsAndTimes(True)
 
     # helper method for storing custom data
     def addCustomData(self, key, data):
