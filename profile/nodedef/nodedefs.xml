@@ -95,7 +95,7 @@
   <nodeDef id="SENSOR" nls="SEN">
     <sts>
       <st id="ST" editor="_17_0" /> <!-- ISY C Temperature UOM -->
-      <st id="CLIHUM" editor="_22_0" /> <!-- ISY Relative Humidity UOM -->
+      <st id="BATLVL" editor="_51_0_N_IX_SEN_BATLVL" /> <!-- ISY Percentage UOM -->
     </sts>
     <cmds>
       <sends />

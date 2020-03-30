@@ -138,7 +138,14 @@ class thermostatConnection(object):
         
         # if data returned, return the state properties
         if response and response.status_code == 200:
-            return response.json()          
+            
+            # test the response data
+            try:
+                respData = response.json()
+                return respData
+            except:
+                self._logger.warning("Thermostat at %s returned bad data in getThermostatState().", self._hostname)
+                return False                
             
         # otherwise return error (False)
         else:
@@ -159,8 +166,15 @@ class thermostatConnection(object):
 
         # if data returned, return the alert states
         if response and response.status_code == 200:
-            return response.json()
             
+            # test the response data
+            try:
+                respData = response.json()
+                return respData
+            except:
+                self._logger.warning("Thermostat at %s returned bad data in getThermostatAlerts().", self._hostname)
+                return False                  
+
         # otherwise return error (False)
         else:
             return False
@@ -180,8 +194,15 @@ class thermostatConnection(object):
 
         # if data returned, return the sensor states
         if response and response.status_code == 200:
-            return response.json()
-            
+
+            # test the response data
+            try:
+                respData = response.json()
+                return respData
+            except:
+                self._logger.warning("Thermostat at %s returned bad data in getSensorStates().", self._hostname)
+                return False      
+
         # otherwise return error (False)
         else:
             return False

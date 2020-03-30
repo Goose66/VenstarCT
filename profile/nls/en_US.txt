@@ -44,3 +44,4 @@ IX_TSTAT_ALERT-1 = Alert
 ND-SENSOR-NAME = Sensor
 ND-SENSOR-ICON = TempSensor
 ST-SEN-ST-NAME = Temperature
+IX_SEN_BATLVL-0 = N/A

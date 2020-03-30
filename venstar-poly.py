@@ -16,6 +16,7 @@ LOGGER = polyinterface.LOGGER
 # contstants for ISY Nodeserver interface
 ISY_BOOL_UOM =2 # Used for reporting status value for Controller node
 ISY_INDEX_UOM = 25 # Custom index UOM for translating direction values
+ISY_INDEX_PERCENT = 51 # UOM for percentages
 ISY_TEMP_F_UOM = 17 # UOM for temperatures (farenheit)
 ISY_TEMP_C_UOM = 4 # UOM for temperatures (celcius)
 ISY_REL_HUMIDITY = 22 # UOM for relative humidity (percent)
@@ -66,7 +67,7 @@ class Sensor(polyinterface.Node):
         
     drivers = [
         {"driver": "ST", "value": 0.0, "uom": ISY_TEMP_F_UOM},
-        {"driver": "CLIHUM", "value": 0, "uom": ISY_REL_HUMIDITY},
+        {"driver": "BATLVL", "value": 0, "uom": ISY_INDEX_PERCENT},
     ]
 
 # Node class for thermostat
@@ -90,20 +91,12 @@ class Thermostat(polyinterface.Node):
             cData = controller.getCustomData(addr).split(";")
             self._hostName = cData[0]
             self._type = cData[1]
-            self.tempUnit = cData[2]
+            self.tempUnit = int(cData[2])
 
         else:
             self._hostName = hostName
             self._type = type
             self.tempUnit = tempUnit
-
-            # store instance variables in polyglot custom data
-            cData = ";".join([
-                self._hostName,
-                self._type,
-                str(self.tempUnit),
-            ])
-            controller.addCustomData(addr, cData)
 
         # setup the temp unit before calling the parent class init()
         self.setTempUnit(self.tempUnit)
@@ -117,6 +110,20 @@ class Thermostat(polyinterface.Node):
 
         # create a connection object in the API for the the thermostat 
         self._conn = api.thermostatConnection(self._hostName, logger=LOGGER)
+
+        # store instance variables in polyglot custom data
+        self.saveProperties()
+
+    # save object properties to custom data
+    def saveProperties(self):
+
+            # store instance variables in polyglot custom data
+            cData = ";".join([
+                self._hostName,
+                self._type,
+                str(self.tempUnit),
+            ])
+            self.controller.addCustomData(self.address, cData)
 
     # Setup the termostat node for the correct temperature unit (0-F or 1-C)
     def setTempUnit(self, tempUnit):
@@ -154,7 +161,9 @@ class Thermostat(polyinterface.Node):
                 if node.id == "SENSOR" and node.primary == self.address:
                     node.setTempUnit(tempUnit)
 
+        # save the changed temp unit back to custom data
         self.tempUnit = tempUnit
+        self.saveProperties()
 
     # Increase/decrease the active setpoint by one degree
     def cmd_inc_dec(self, command):
@@ -382,32 +391,12 @@ class Thermostat(polyinterface.Node):
             # set away state from API flag
             self.setDriver("GV1", int(thermoState["away"]), True, forceReport)
             
-            # get the sensor states
-            sensorStates = self._conn.getSensorStates() 
-
-            if sensorStates:
-
-                # set the default alerts (filter, UV lamp, and service) from the alert info 
-                sensors = sensorStates["sensors"]
-                
-                # spin through the child nodes of this thermostat and update the sensors
-                for addr in self.controller.nodes:
-        
-                    # ignore the controller and this thermostat node
-                    if addr != self.address and addr != self.controller.address:
-
-                        # if the device is a Sesnor node, retrieve the driver values from the sensor State data
-                        node = self.controller.nodes[addr]
-                        if node.id == "SENSOR" and node.primary == self.address:
-                            node.setDriver("ST", float(next((sensor["temp"] for sensor in sensors if sensor["name"] == node.name), 0.0)), True, forceReport) 
-                            node.setDriver("CLIHUM", int(next((sensor["hum"] for sensor in sensors if sensor["name"] == node.name), 0)), True, forceReport)             
-
         else:
             # set thermostat state to offline:
             self.setDriver("GV0", 0, True, force=forceReport) # Thermostat offline
 
-    # update the alerts and runtimes for this thermostat
-    def updateAlertsAndTimes(self, forceReport=False):
+    # update the sensor states and alerts for this thermostat
+    def updateSensorsandAlerts(self, forceReport=False):
         
         # get the alert properties for the thermostat
         alertStates = self._conn.getThermostatAlerts() 
@@ -420,6 +409,24 @@ class Thermostat(polyinterface.Node):
             self.setDriver("GV12", int(next((alert["active"] for alert in alerts if alert["name"] == "UV Lamp"), False)), True, forceReport) 
             self.setDriver("GV13", int(next((alert["active"] for alert in alerts if alert["name"] == "Service"), False)), True, forceReport) 
 
+        # get the state of remote sensors connected to the thermostat
+        sensorStates = self._conn.getSensorStates() 
+
+        if sensorStates:
+
+            # spin through the child nodes of this thermostat and update the sensors
+            for addr in self.controller.nodes:
+    
+                # if the device is a sensor node, retrieve the driver values from the sensor State data
+                node = self.controller.nodes[addr]
+                if node.id == "SENSOR" and node.primary == self.address:
+
+                    # locate the sensor in the sensor states corresponding to the node
+                    sensor = next((sensor for sensor in sensorStates["sensors"] if sensor["name"] == node.name), None)
+                    if sensor:
+                        node.setDriver("ST", float(sensor.get("temp", 0)), True, forceReport)
+                        node.setDriver("BATLVL", int(sensor.get("battery", 0)), True, forceReport)
+        
         # get the runtimes for the thermostat
         # TO-DO
 
@@ -571,10 +578,13 @@ class Controller(polyinterface.Controller):
             # ignore the controller node
             if addr != self.address:
 
-                # if the device is a thermostat node, call the update alerts method
+                # if the device is a thermostat node, call the sensors and alerts method
                 node = self.controller.nodes[addr]
                 if node.id in ("THERMOSTAT", "THERMOSTAT_C"):
-                    node.updateAlertsAndTimes()
+                    node.updateSensorsandAlerts()
+
+        # saved any instance variable changes to Polyglot (e.g., temp units)
+        self.saveCustomData(self._customData)
 
     # called every shortPoll seconds
     def shortPoll(self):
@@ -703,7 +713,7 @@ class Controller(polyinterface.Controller):
                 node = self.controller.nodes[addr]
                 if node.id in ("THERMOSTAT", "THERMOSTAT_C"):
                     node.updateNodeStates(True)
-                    node.updateAlertsAndTimes(True)
+                    node.updateSensorsandAlerts(True)
 
     # helper method for storing custom data
     def addCustomData(self, key, data):
