@@ -370,26 +370,32 @@ class Thermostat(polyinterface.Node):
             self.setDriver("ST", float(thermoState["spacetemp"]), True, forceReport)
             self.setDriver("CLISPH", float(thermoState["heattemp"]), True, forceReport)
             self.setDriver("CLISPC", float(thermoState["cooltemp"]), True, forceReport)
-            self.setDriver("CLIHUM", float(thermoState["hum"]), True, forceReport)
+
             # API thermostat mode utilizes values 0-3 (off, heat, cool, auto) and 13 (away) of ISY Thermostat mode UOM
             if thermoState["away"] == 1:
                 self.setDriver("CLIMD", IX_TSTAT_MODE_AWAY, True, forceReport)
             else:
                 self.setDriver("CLIMD", int(thermoState["mode"]), True, forceReport)
+
             # API thermostat fan mode translates directly to first two values (0-1) of ISY Fan mode UOM
             self.setDriver("CLIFS", int(thermoState["fan"]), True, forceReport)
+
             # API thermostat state translates directly to first three values (0-2) of ISY Thermostat heat/cool state UOM but has additional two values
             if thermoState["state"] in (0, 1, 2): 
                 state = int(thermoState["state"])
             else:
                 state = int(thermoState["state"]) + 10
             self.setDriver("CLIHCS", state, True, forceReport) 
+
             # API thermostat fan state mode translates directly to first two values (0-1) of ISY Fan running state UOM
             self.setDriver("CLIFRS", int(thermoState["fanstate"]), True, forceReport)
-            # translate API schedule part into ISY schedule mode indexed values
-            self.setDriver("CLISMD", int(thermoState["schedulepart"]), True, forceReport)
-            # set away state from API flag
-            self.setDriver("GV1", int(thermoState["away"]), True, forceReport)
+
+            # return humidity if present, otherwise zero
+            self.setDriver("CLIHUM", float(thermoState.get("hum", 0)), True, forceReport)
+
+            # translate API schedule part into ISY schedule mode indexed values, if present
+            self.setDriver("CLISMD", int(thermoState.get("schedulepart", IX_TSTAT_SCHED_MODE_INACTIVE)), True, forceReport)
+
             
         else:
             # set thermostat state to offline:

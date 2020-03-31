@@ -23,7 +23,7 @@
       <st id="CLISPC" editor="TSTAT_SETPOINT" />
       <st id="CLIMD" editor="TSTAT_MODE" />
       <st id="CLIFS" editor="TSTAT_FAN_MODE" />
-      <st id="CLIHUM" editor="_22_0" /> <!-- ISY Relative Humidity UOM -->
+      <st id="CLIHUM" editor="_51_0_N_IX_TSTAT_CLIHUM" /> <!-- ISY Percentage UOM -->
       <st id="CLIHCS" editor="TSTAT_HCS" />
       <st id="CLIFRS" editor="TSTAT_FAN_RUNSTATE" />
       <st id="CLISMD" editor="TSTAT_SCHED_PART" />
@@ -61,7 +61,7 @@
       <st id="CLISPC" editor="TSTAT_SETPOINT_C" />
       <st id="CLIMD" editor="TSTAT_MODE" />
       <st id="CLIFS" editor="TSTAT_FAN_MODE" />
-      <st id="CLIHUM" editor="_22_0" /> <!-- ISY Relative Humidity UOM -->
+      <st id="CLIHUM" editor="_51_0_N_IX_TSTAT_CLIHUM" /> <!-- ISY Percentage UOM -->
       <st id="CLIHCS" editor="TSTAT_HCS" />
       <st id="CLIFRS" editor="TSTAT_FAN_RUNSTATE" />
       <st id="CLISMD" editor="TSTAT_SCHED_PART" />
